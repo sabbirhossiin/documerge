@@ -1,3 +1,63 @@
+// --- SECURITY CONFIGURATION ---
+const SECRET_PASS = "5544332211";
+const STORAGE_KEY = "documerge_access_token";
+
+// --- 0. Authentication Logic ---
+function initSecurity() {
+    const token = localStorage.getItem(STORAGE_KEY);
+    // Simple verification (in a real app, use hashes, but this works for personal use)
+    if (token === btoa(SECRET_PASS)) {
+        unlockApp();
+    }
+}
+
+function checkLogin() {
+    const input = document.getElementById('pass-input');
+    const errorMsg = document.getElementById('login-error');
+    
+    if (input.value === SECRET_PASS) {
+        // Success
+        localStorage.setItem(STORAGE_KEY, btoa(SECRET_PASS)); // Store encoded
+        unlockApp();
+    } else {
+        // Fail
+        errorMsg.classList.remove('hidden');
+        input.classList.add('border-red-500');
+        input.classList.add('animate-pulse');
+        setTimeout(() => input.classList.remove('animate-pulse'), 500);
+    }
+}
+
+function unlockApp() {
+    const overlay = document.getElementById('login-overlay');
+    const app = document.getElementById('app-container');
+    
+    // Hide overlay with fade out
+    overlay.style.transition = 'opacity 0.5s';
+    overlay.style.opacity = '0';
+    setTimeout(() => overlay.remove(), 500); // Remove from DOM
+    
+    // Show App
+    app.classList.remove('blur-sm');
+    app.classList.remove('opacity-0');
+    
+    addLog("User authenticated. System unlocked.");
+    lucide.createIcons();
+}
+
+// Add enter key support for login
+document.getElementById('pass-input')?.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        checkLogin();
+    }
+});
+
+// Run security check on load
+initSecurity();
+
+
+// --- APP LOGIC BELOW (Smart Grouping & Processing) ---
+
 // Global State
 const fileStore = {
     iqma: [],
@@ -7,7 +67,7 @@ const fileStore = {
 };
 let matchedData = {};
 
-// Initialize Lucide Icons
+// Initialize Lucide Icons (Initial call)
 lucide.createIcons();
 
 // --- 1. File Handling ---
@@ -50,26 +110,23 @@ document.getElementById('btn-match').addEventListener('click', () => {
     matchedData = {};
 
     // Helper: Cleans filename to find the REAL person name
-    // Removes extensions and category keywords (iqma, ajeer, etc.)
     const getCleanName = (filename) => {
         // 1. Remove Extension
         let name = filename.substring(0, filename.lastIndexOf('.')) || filename;
         
         // 2. Remove common category suffixes (Case Insensitive)
-        // This ensures "Rahim Ajeer.pdf" and "Rahim.jpg" become just "Rahim"
         const keywords = ['iqma', 'ajeer', 'insurance', 'medical', 'copy', 'scan', 'final'];
         keywords.forEach(word => {
-            const regex = new RegExp(`\\b${word}\\b`, 'gi'); // Matches whole word
+            const regex = new RegExp(`\\b${word}\\b`, 'gi'); 
             name = name.replace(regex, ''); 
         });
 
-        // 3. Remove extra spaces and special chars like (_, -) at the end
+        // 3. Remove extra spaces and special chars
         name = name.replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
-        
         return name.toLowerCase();
     };
 
-    // Helper: Get Display Name (Capitalized properly from the cleanest version)
+    // Helper: Get Display Name
     const formatDisplayName = (cleanName) => {
         return cleanName.split(' ')
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -85,7 +142,7 @@ document.getElementById('btn-match').addEventListener('click', () => {
             if (!matchedData[cleanKey]) {
                 matchedData[cleanKey] = {
                     key: cleanKey,
-                    name: formatDisplayName(cleanKey), // Pretty name
+                    name: formatDisplayName(cleanKey), 
                     iqma: [],
                     ajeer: [],
                     insurance: [],
@@ -106,7 +163,7 @@ document.getElementById('btn-match').addEventListener('click', () => {
     showToast('Analysis Complete', `Found ${count} unique persons. Groups merged.`, 'success');
 });
 
-// --- 3. UI Rendering (Updated for Icons) ---
+// --- 3. UI Rendering ---
 function renderTable() {
     const tbody = document.getElementById('table-body');
     tbody.innerHTML = '';
@@ -115,7 +172,6 @@ function renderTable() {
     Object.values(matchedData).forEach(person => {
         if (searchTerm && !person.name.toLowerCase().includes(searchTerm)) return;
 
-        // Check if all files exist (for row highlighting/status)
         const isComplete = person.iqma.length > 0 && person.ajeer.length > 0 && person.insurance.length > 0 && person.medical.length > 0;
         
         const row = `
@@ -148,7 +204,6 @@ function renderTable() {
                                 title="Preview Merged PDF">
                             <i data-lucide="eye" class="w-5 h-5"></i>
                         </button>
-                        
                         <button onclick="downloadIndividual('${person.key}')" 
                                 class="p-2 rounded-full bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-all"
                                 title="Download PDF">
@@ -161,13 +216,11 @@ function renderTable() {
         tbody.innerHTML += row;
     });
     
-    // Re-init icons for the new rows
     lucide.createIcons();
 }
 
 function getBadge(count, type) {
     if (count > 0) {
-        // Returns a nice file count badge
         return `
             <div class="flex flex-col items-center">
                  <i data-lucide="check-circle-2" class="w-5 h-5 text-green-500 mb-1"></i>
@@ -183,10 +236,9 @@ function getBadge(count, type) {
     `;
 }
 
-// Search Filter
 document.getElementById('search-box').addEventListener('input', renderTable);
 
-// --- 4. Single PDF Generation Logic (Reusable) ---
+// --- 4. PDF Logic ---
 async function generatePDFForPerson(personKey) {
     const person = matchedData[personKey];
     if (!person) return null;
@@ -199,7 +251,6 @@ async function generatePDFForPerson(personKey) {
         return null;
     }
 
-    // Add Watermark Logic
     const useWatermark = document.getElementById('check-watermark').checked;
 
     for (const file of allFiles) {
@@ -225,7 +276,6 @@ async function generatePDFForPerson(personKey) {
         }
     }
 
-    // Apply Watermark
     if (useWatermark) {
         const pages = mergedPdf.getPages();
         const font = await mergedPdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
@@ -242,9 +292,6 @@ async function generatePDFForPerson(personKey) {
     return await mergedPdf.save();
 }
 
-// --- 5. Individual Action Handlers ---
-
-// Preview Function (Opens in new tab)
 window.previewIndividual = async (key) => {
     addLog(`Generating preview for: ${matchedData[key].name}...`);
     showToast('Generating Preview', 'Please wait...', 'success');
@@ -258,7 +305,6 @@ window.previewIndividual = async (key) => {
     }
 };
 
-// Download Function (Downloads single file)
 window.downloadIndividual = async (key) => {
     const person = matchedData[key];
     addLog(`Starting download for: ${person.name}...`);
@@ -277,8 +323,6 @@ window.downloadIndividual = async (key) => {
     }
 };
 
-
-// --- 6. Bulk Process (ZIP) ---
 document.getElementById('btn-process').addEventListener('click', async () => {
     const btn = document.getElementById('btn-process');
     const progressBar = document.getElementById('progress-bar');
@@ -324,6 +368,7 @@ document.getElementById('btn-process').addEventListener('click', async () => {
 // Utilities
 function addLog(msg) {
     const logPanel = document.getElementById('system-logs');
+    if (!logPanel) return;
     const time = new Date().toLocaleTimeString();
     const entry = document.createElement('div');
     entry.textContent = `[${time}] ${msg}`;
@@ -342,7 +387,7 @@ function showToast(title, msg, type) {
     
     if(type === 'success') {
         icon.innerHTML = '<i data-lucide="check-circle" class="text-green-600"></i>';
-        toast.className = 'fixed bottom-5 right-5 bg-white border-l-4 border-green-500 text-gray-900 px-6 py-4 rounded-lg shadow-2xl transform transition-transform duration-300 z-50 flex items-center gap-3 translate-y-0';
+        toast.className = 'fixed bottom-5 right-5 bg-white border-l-4 border-green-500 text-gray-900 px-6 py-4 rounded-lg shadow-2xl transform transition-transform duration-300 z-[200] flex items-center gap-3 translate-y-0';
     } else {
         icon.innerHTML = '<i data-lucide="alert-circle" class="text-red-600"></i>';
     }
@@ -352,6 +397,3 @@ function showToast(title, msg, type) {
         toast.classList.add('translate-y-20');
     }, 4000);
 }
-
-// Initial Log
-addLog("System initialized. Waiting for folder inputs...");
